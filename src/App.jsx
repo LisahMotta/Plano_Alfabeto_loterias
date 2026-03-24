@@ -1,66 +1,131 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 
+// Helper to generate number range array
+const range = (start, end) => Array.from({ length: end - start + 1 }, (_, i) => start + i);
+
 const LOTTERIES = {
   lotofacil: {
     name: "Lotofácil",
     icon: "🍀",
     range: [1, 25],
     pick: 15,
-    groupSize: 5,
     groups: {
-      A: [1, 2, 3, 4, 5],
-      B: [6, 7, 8, 9, 10],
-      C: [11, 12, 13, 14, 15],
-      D: [16, 17, 18, 19, 20],
-      E: [21, 22, 23, 24, 25],
+      A: range(1,5), B: range(6,10), C: range(11,15),
+      D: range(16,20), E: range(21,25),
     },
     color: "#7B2D8E",
     colorLight: "#F3E8F9",
-    colorMid: "#D4A5E5",
     defaultDistribution: { A: 3, B: 3, C: 3, D: 3, E: 3 },
-    description: "15 números de 25 · 5 grupos de 5",
-  },
-  quina: {
-    name: "Quina",
-    icon: "🎯",
-    range: [1, 80],
-    pick: 5,
-    groupSize: 10,
-    groups: {
-      A: [1,2,3,4,5,6,7,8,9,10],
-      B: [11,12,13,14,15,16,17,18,19,20],
-      C: [21,22,23,24,25,26,27,28,29,30],
-      D: [31,32,33,34,35,36,37,38,39,40],
-      E: [41,42,43,44,45,46,47,48,49,50],
-      F: [51,52,53,54,55,56,57,58,59,60],
-      G: [61,62,63,64,65,66,67,68,69,70],
-      H: [71,72,73,74,75,76,77,78,79,80],
-    },
-    color: "#1A3A6B",
-    colorLight: "#E8EFF8",
-    colorMid: "#8BADD4",
-    defaultDistribution: { A: 1, B: 0, C: 1, D: 0, E: 1, F: 0, G: 1, H: 1 },
-    description: "5 números de 80 · 8 grupos de 10",
+    description: "15 de 25 · 5 grupos",
+    apiSlug: "lotofacil",
   },
   megasena: {
     name: "Mega-Sena",
     icon: "💰",
     range: [1, 60],
     pick: 6,
-    groupSize: 10,
     groups: {
-      A: [1,2,3,4,5,6,7,8,9,10],
-      B: [11,12,13,14,15,16,17,18,19,20],
-      C: [21,22,23,24,25,26,27,28,29,30],
-      D: [31,32,33,34,35,36,37,38,39,40],
-      E: [41,42,43,44,45,46,47,48,49,50],
-      F: [51,52,53,54,55,56,57,58,59,60],
+      A: range(1,10), B: range(11,20), C: range(21,30),
+      D: range(31,40), E: range(41,50), F: range(51,60),
     },
     color: "#1E7A34",
     colorLight: "#E6F5EA",
-    colorMid: "#8BD4A0",
     defaultDistribution: { A: 1, B: 1, C: 1, D: 1, E: 1, F: 1 },
-    description: "6 números de 60 · 6 grupos de 10",
+    description: "6 de 60 · 6 grupos",
+    apiSlug: "mega-sena",
+  },
+  quina: {
+    name: "Quina",
+    icon: "🎯",
+    range: [1, 80],
+    pick: 5,
+    groups: {
+      A: range(1,10), B: range(11,20), C: range(21,30), D: range(31,40),
+      E: range(41,50), F: range(51,60), G: range(61,70), H: range(71,80),
+    },
+    color: "#1A3A6B",
+    colorLight: "#E8EFF8",
+    defaultDistribution: { A: 1, B: 0, C: 1, D: 0, E: 1, F: 0, G: 1, H: 1 },
+    description: "5 de 80 · 8 grupos",
+    apiSlug: "quina",
+  },
+  lotomania: {
+    name: "Lotomania",
+    icon: "🎪",
+    range: [0, 99],
+    pick: 50,
+    groups: {
+      A: range(0,9), B: range(10,19), C: range(20,29), D: range(30,39),
+      E: range(40,49), F: range(50,59), G: range(60,69), H: range(70,79),
+      I: range(80,89), J: range(90,99),
+    },
+    color: "#D4540F",
+    colorLight: "#FFF3E8",
+    defaultDistribution: { A: 5, B: 5, C: 5, D: 5, E: 5, F: 5, G: 5, H: 5, I: 5, J: 5 },
+    description: "50 de 100 · 10 grupos",
+    apiSlug: "lotomania",
+  },
+  timemania: {
+    name: "Timemania",
+    icon: "⚽",
+    range: [1, 80],
+    pick: 10,
+    groups: {
+      A: range(1,10), B: range(11,20), C: range(21,30), D: range(31,40),
+      E: range(41,50), F: range(51,60), G: range(61,70), H: range(71,80),
+    },
+    color: "#2D8E3A",
+    colorLight: "#E8F9EC",
+    defaultDistribution: { A: 1, B: 1, C: 2, D: 1, E: 1, F: 1, G: 2, H: 1 },
+    description: "10 de 80 · 8 grupos",
+    apiSlug: "timemania",
+  },
+  duplasena: {
+    name: "Dupla Sena",
+    icon: "🎲",
+    range: [1, 50],
+    pick: 6,
+    groups: {
+      A: range(1,10), B: range(11,20), C: range(21,30),
+      D: range(31,40), E: range(41,50),
+    },
+    color: "#8E2D5A",
+    colorLight: "#F9E8F1",
+    defaultDistribution: { A: 1, B: 1, C: 2, D: 1, E: 1 },
+    description: "6 de 50 · 5 grupos",
+    apiSlug: "dupla-sena",
+  },
+  diadesorte: {
+    name: "Dia de Sorte",
+    icon: "☀️",
+    range: [1, 31],
+    pick: 7,
+    groups: {
+      A: range(1,8), B: range(9,16), C: range(17,24), D: range(25,31),
+    },
+    color: "#B8860B",
+    colorLight: "#FFF8E8",
+    defaultDistribution: { A: 2, B: 2, C: 2, D: 1 },
+    description: "7 de 31 · 4 grupos",
+    apiSlug: "dia-de-sorte",
+  },
+  maismilionaria: {
+    name: "+Milionária",
+    icon: "💎",
+    range: [1, 50],
+    pick: 6,
+    groups: {
+      A: range(1,10), B: range(11,20), C: range(21,30),
+      D: range(31,40), E: range(41,50),
+    },
+    color: "#4A1A8E",
+    colorLight: "#F0E8F9",
+    defaultDistribution: { A: 1, B: 1, C: 2, D: 1, E: 1 },
+    description: "6 de 50 + 2 trevos · 5 grupos",
+    apiSlug: "mais-milionaria",
+    hasTrevos: true,
+    trevosRange: [1, 6],
+    trevosPick: 2,
   },
 };
 
@@ -83,7 +148,15 @@ const generateGame = (lottery, distribution) => {
       game.push(...shuffled.slice(0, count));
     }
   });
-  return game.sort((a, b) => a - b);
+  const sorted = game.sort((a, b) => a - b);
+
+  // Generate trevos for +Milionária
+  if (lottery.hasTrevos) {
+    const allTrevos = range(lottery.trevosRange[0], lottery.trevosRange[1]);
+    const trevos = shuffle(allTrevos).slice(0, lottery.trevosPick).sort((a, b) => a - b);
+    return { numbers: sorted, trevos };
+  }
+  return sorted;
 };
 
 const analyzeGame = (game) => {
@@ -224,12 +297,15 @@ function GroupCard({ letter, numbers, count, onCountChange, color, maxCount }) {
 }
 
 function GameCard({ game, index, color, lottery, onRemove }) {
-  const analysis = analyzeGame(game);
+  // Handle both formats: array or { numbers, trevos }
+  const numbers = Array.isArray(game) ? game : game.numbers;
+  const trevos = Array.isArray(game) ? null : game.trevos;
+  const analysis = analyzeGame(numbers);
   const groupKeys = Object.keys(lottery.groups);
 
   const groupDistText = groupKeys
     .map((k) => {
-      const count = game.filter((n) => lottery.groups[k].includes(n)).length;
+      const count = numbers.filter((n) => lottery.groups[k].includes(n)).length;
       return count > 0 ? `${k}:${count}` : null;
     })
     .filter(Boolean)
@@ -260,11 +336,28 @@ function GameCard({ game, index, color, lottery, onRemove }) {
       <div style={{ fontSize: 11, fontWeight: 700, color, marginBottom: 10, fontFamily: "'JetBrains Mono', monospace" }}>
         JOGO #{index + 1}
       </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 12 }}>
-        {game.map((n) => (
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: trevos ? 8 : 12 }}>
+        {numbers.map((n) => (
           <NumberBall key={n} number={n} color={color} size="md" highlight />
         ))}
       </div>
+      {trevos && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "#B8860B", fontFamily: "'JetBrains Mono', monospace" }}>
+            TREVOS:
+          </span>
+          {trevos.map((t) => (
+            <div key={t} style={{
+              width: 32, height: 32, borderRadius: "50%",
+              background: "#B8860B", color: "#fff",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace",
+            }}>
+              {t}
+            </div>
+          ))}
+        </div>
+      )}
       <div style={{ fontSize: 11, color: "#888", fontFamily: "'DM Sans', sans-serif", lineHeight: 1.6 }}>
         <span style={{ fontWeight: 600 }}>Grupos:</span> {groupDistText}
         <br />
@@ -284,17 +377,11 @@ function ResultsPanel({ color }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const lotterySlugs = {
-    megasena: "mega-sena",
-    lotofacil: "lotofacil",
-    quina: "quina",
-  };
-
   const fetchResults = async () => {
     setLoading(true);
     setError(null);
     try {
-      const slug = lotterySlugs[searchLottery];
+      const slug = LOTTERIES[searchLottery].apiSlug;
       const res = await fetch(`https://loteriascaixa-api.herokuapp.com/api/${slug}/latest`);
       if (!res.ok) throw new Error("Erro na API");
       const data = await res.json();
@@ -311,19 +398,19 @@ function ResultsPanel({ color }) {
       <h3 style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 700, color: "#222", marginBottom: 16 }}>
         Consultar Último Resultado
       </h3>
-      <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
         {Object.entries(LOTTERIES).map(([key, l]) => (
           <button
             key={key}
             onClick={() => { setSearchLottery(key); setResults(null); setError(null); }}
             style={{
-              padding: "10px 18px",
+              padding: "8px 12px",
               borderRadius: 10,
               border: searchLottery === key ? `2px solid ${l.color}` : "2px solid #e0e0e0",
               background: searchLottery === key ? `${l.color}12` : "#fff",
               color: searchLottery === key ? l.color : "#666",
               fontWeight: 600,
-              fontSize: 14,
+              fontSize: 12,
               cursor: "pointer",
               fontFamily: "'DM Sans', sans-serif",
             }}
@@ -588,28 +675,32 @@ export default function PlanoAlfabetoApp() {
       </div>
 
       {/* Lottery Selector */}
-      <div style={{ display: "flex", gap: 8, padding: "16px 16px 0", overflowX: "auto" }}>
+      <div style={{
+        display: "flex", gap: 8, padding: "16px 16px 0",
+        overflowX: "auto", WebkitOverflowScrolling: "touch",
+        scrollbarWidth: "none", msOverflowStyle: "none",
+      }}>
         {Object.entries(LOTTERIES).map(([key, l]) => (
           <button
             key={key}
             onClick={() => { setActiveLottery(key); setGeneratedGames([]); setManualNumbers([]); }}
             style={{
-              flex: "1 1 0",
-              padding: "12px 8px",
+              flex: "0 0 auto",
+              padding: "10px 12px",
               borderRadius: 12,
               border: activeLottery === key ? `2.5px solid ${l.color}` : "2px solid #e8e8e8",
               background: activeLottery === key ? l.colorLight : "#fff",
               cursor: "pointer",
               textAlign: "center",
               transition: "all 0.2s",
-              minWidth: 100,
+              minWidth: 90,
             }}
           >
-            <div style={{ fontSize: 22 }}>{l.icon}</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: activeLottery === key ? l.color : "#666", marginTop: 2 }}>
+            <div style={{ fontSize: 20 }}>{l.icon}</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: activeLottery === key ? l.color : "#666", marginTop: 2 }}>
               {l.name}
             </div>
-            <div style={{ fontSize: 10, color: "#999", marginTop: 2 }}>{l.description}</div>
+            <div style={{ fontSize: 9, color: "#999", marginTop: 2, whiteSpace: "nowrap" }}>{l.description}</div>
           </button>
         ))}
       </div>
