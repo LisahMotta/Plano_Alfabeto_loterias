@@ -19,15 +19,29 @@ const sendNotification = (title, body, icon = "/icon-192.png") => {
   }
 };
 
-// Gerador de fechamento para garantir ao menos 1 terno
-// Dado N dezenas escolhidas, gera combinações de K números
-// cobrindo todas as combinações de 3 (ternos possíveis)
-const generateTernoClosing = (selectedNumbers, pickSize) => {
+// Configuração de fechamento por loteria
+const CLOSING_CONFIG = {
+  lotofacil: { guarantee: 11, label: "11 acertos", maxNums: 20, tip: "Escolha 16 a 20 dezenas" },
+  megasena: { guarantee: 4, label: "Quadra", maxNums: 15, tip: "Escolha 8 a 12 dezenas" },
+  quina: { guarantee: 2, label: "Duque", maxNums: 12, tip: "Escolha 7 a 10 dezenas" },
+  lotomania: null, // 50 números, fechamento não se aplica bem
+  timemania: { guarantee: 3, label: "3 acertos", maxNums: 15, tip: "Escolha 11 a 15 dezenas" },
+  duplasena: { guarantee: 3, label: "Terno", maxNums: 12, tip: "Escolha 8 a 12 dezenas" },
+  diadesorte: { guarantee: 4, label: "4 acertos", maxNums: 12, tip: "Escolha 8 a 12 dezenas" },
+  supersete: null, // colunas, fechamento diferente
+  maismilionaria: { guarantee: 4, label: "4 acertos", maxNums: 12, tip: "Escolha 8 a 12 dezenas" },
+};
+
+// Gera o menor conjunto de jogos que garante ao menos 1 acerto na faixa
+// selectedNumbers: dezenas escolhidas
+// pickSize: quantos números por jogo (6 para mega, 5 para quina, etc.)
+// guarantee: quantos acertos garantir (4 para quadra, 3 para terno, etc.)
+const generateClosing = (selectedNumbers, pickSize, guarantee) => {
   const nums = [...selectedNumbers].sort((a, b) => a - b);
   const n = nums.length;
   if (n < pickSize) return [];
 
-  // Gera todas as combinações de pickSize a partir dos números selecionados
+  // Gera todas as combinações de pickSize
   const combinations = [];
   const combine = (start, current) => {
     if (current.length === pickSize) {
@@ -42,41 +56,51 @@ const generateTernoClosing = (selectedNumbers, pickSize) => {
   };
   combine(0, []);
 
-  // Gera todos os ternos possíveis
-  const ternos = new Set();
-  for (let i = 0; i < n - 2; i++) {
-    for (let j = i + 1; j < n - 1; j++) {
-      for (let k = j + 1; k < n; k++) {
-        ternos.add(`${nums[i]},${nums[j]},${nums[k]}`);
-      }
+  // Gera todos os sub-conjuntos de tamanho 'guarantee' (alvos a cobrir)
+  const targets = new Set();
+  const genTargets = (start, current) => {
+    if (current.length === guarantee) {
+      targets.add(current.join(","));
+      return;
     }
-  }
+    for (let i = start; i < n; i++) {
+      current.push(nums[i]);
+      genTargets(i + 1, current);
+      current.pop();
+    }
+  };
+  genTargets(0, []);
 
-  // Greedy set cover: seleciona jogos que cobrem mais ternos não cobertos
-  const coveredTernos = new Set();
-  const selectedGames = [];
-
-  // Calcula ternos por combinação
-  const ternosByCombo = combinations.map((combo) => {
+  // Calcula quais alvos cada combinação cobre
+  const targetsByCombo = combinations.map((combo) => {
     const ts = new Set();
-    for (let i = 0; i < combo.length - 2; i++) {
-      for (let j = i + 1; j < combo.length - 1; j++) {
-        for (let k = j + 1; k < combo.length; k++) {
-          ts.add(`${combo[i]},${combo[j]},${combo[k]}`);
-        }
+    const genSub = (start, current) => {
+      if (current.length === guarantee) {
+        ts.add(current.join(","));
+        return;
       }
-    }
-    return { combo, ternos: ts };
+      for (let i = start; i < combo.length; i++) {
+        current.push(combo[i]);
+        genSub(i + 1, current);
+        current.pop();
+      }
+    };
+    genSub(0, []);
+    return { combo, targets: ts };
   });
 
-  while (coveredTernos.size < ternos.size && selectedGames.length < 200) {
+  // Greedy set cover
+  const covered = new Set();
+  const selected = [];
+
+  while (covered.size < targets.size && selected.length < 500) {
     let bestIdx = -1;
     let bestNew = 0;
 
-    for (let i = 0; i < ternosByCombo.length; i++) {
+    for (let i = 0; i < targetsByCombo.length; i++) {
       let newCount = 0;
-      for (const t of ternosByCombo[i].ternos) {
-        if (!coveredTernos.has(t)) newCount++;
+      for (const t of targetsByCombo[i].targets) {
+        if (!covered.has(t)) newCount++;
       }
       if (newCount > bestNew) {
         bestNew = newCount;
@@ -86,14 +110,14 @@ const generateTernoClosing = (selectedNumbers, pickSize) => {
 
     if (bestIdx === -1 || bestNew === 0) break;
 
-    selectedGames.push(ternosByCombo[bestIdx].combo);
-    for (const t of ternosByCombo[bestIdx].ternos) {
-      coveredTernos.add(t);
+    selected.push(targetsByCombo[bestIdx].combo);
+    for (const t of targetsByCombo[bestIdx].targets) {
+      covered.add(t);
     }
-    ternosByCombo.splice(bestIdx, 1);
+    targetsByCombo.splice(bestIdx, 1);
   }
 
-  return selectedGames;
+  return selected;
 };
 
 // Export games as text for sharing
@@ -802,7 +826,7 @@ export default function PlanoAlfabetoApp() {
     )
   );
   const [generatedGames, setGeneratedGames] = useState([]);
-  const [gameCount, setGameCount] = useState(5);
+  const [gameCount, setGameCount] = useState(100);
   const [manualNumbers, setManualNumbers] = useState([]);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [installPrompt, setInstallPrompt] = useState(null);
@@ -1169,26 +1193,27 @@ export default function PlanoAlfabetoApp() {
               )}
             </div>
 
-            {/* Fechamento Terno - Mega-Sena e Quina */}
-            {(activeLottery === "megasena" || activeLottery === "quina") && (
+            {/* Fechamento Garantido - disponível por loteria */}
+            {CLOSING_CONFIG[activeLottery] && (
               <div style={{
                 marginBottom: 20, padding: 16, borderRadius: 14,
                 background: `${lottery.color}06`, border: `1.5px solid ${lottery.color}20`,
               }}>
                 <h4 style={{ fontFamily: "'Fraunces', serif", fontSize: 16, fontWeight: 700, color: lottery.color, margin: "0 0 8px" }}>
-                  🎯 Fechamento Terno
+                  🎯 Fechamento — Garantia de {CLOSING_CONFIG[activeLottery].label}
                 </h4>
                 <p style={{ fontSize: 13, color: "#666", margin: "0 0 12px", lineHeight: 1.5 }}>
-                  Escolha dezenas e gere o menor número de jogos que garante ao menos <strong>1 terno</strong> se
-                  3 das suas dezenas forem sorteadas.
-                  {activeLottery === "megasena" ? " (Recomendado: 8 a 12 dezenas)" : " (Recomendado: 7 a 10 dezenas)"}
+                  Escolha dezenas e gere o menor número de jogos que garante ao menos{" "}
+                  <strong>{CLOSING_CONFIG[activeLottery].label}</strong> se{" "}
+                  {CLOSING_CONFIG[activeLottery].guarantee} das suas dezenas forem sorteadas.{" "}
+                  ({CLOSING_CONFIG[activeLottery].tip})
                 </p>
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: "#444", marginBottom: 6 }}>
                     Selecione suas dezenas:
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                    {range(lottery.range[0], Math.min(lottery.range[1], 80)).map((n) => {
+                    {range(lottery.range[0], lottery.range[1]).map((n) => {
                       const sel = (manualNumbers || []).includes(n);
                       return (
                         <div
@@ -1196,7 +1221,7 @@ export default function PlanoAlfabetoApp() {
                           onClick={() => {
                             setManualNumbers((prev) => {
                               if (prev.includes(n)) return prev.filter((x) => x !== n);
-                              if (prev.length >= 15) return prev;
+                              if (prev.length >= CLOSING_CONFIG[activeLottery].maxNums) return prev;
                               return [...prev, n].sort((a, b) => a - b);
                             });
                           }}
@@ -1215,9 +1240,17 @@ export default function PlanoAlfabetoApp() {
                       );
                     })}
                   </div>
-                  <div style={{ fontSize: 12, color: "#888", marginTop: 6 }}>
-                    {manualNumbers.length} dezena(s) selecionada(s)
-                    {manualNumbers.length < lottery.pick && ` (mínimo ${lottery.pick})`}
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+                    <span style={{ fontSize: 12, color: "#888" }}>
+                      {manualNumbers.length}/{CLOSING_CONFIG[activeLottery].maxNums} dezena(s)
+                      {manualNumbers.length < lottery.pick && ` · mínimo ${lottery.pick}`}
+                    </span>
+                    {manualNumbers.length > 0 && (
+                      <button onClick={() => setManualNumbers([])} style={{
+                        fontSize: 11, color: "#999", background: "none", border: "none",
+                        cursor: "pointer", textDecoration: "underline",
+                      }}>limpar</button>
+                    )}
                   </div>
                 </div>
                 <button
@@ -1226,11 +1259,8 @@ export default function PlanoAlfabetoApp() {
                       alert(`Selecione ao menos ${lottery.pick} dezenas.`);
                       return;
                     }
-                    if (manualNumbers.length > 15) {
-                      alert("Máximo de 15 dezenas para fechamento (muitas combinações acima disso).");
-                      return;
-                    }
-                    const games = generateTernoClosing(manualNumbers, lottery.pick);
+                    const cfg = CLOSING_CONFIG[activeLottery];
+                    const games = generateClosing(manualNumbers, lottery.pick, cfg.guarantee);
                     if (games.length === 0) {
                       alert("Não foi possível gerar o fechamento.");
                       return;
@@ -1247,7 +1277,9 @@ export default function PlanoAlfabetoApp() {
                     fontFamily: "'DM Sans', sans-serif",
                   }}
                 >
-                  🎯 Gerar Fechamento Terno ({manualNumbers.length >= lottery.pick ? "calcular" : "selecione mais"})
+                  🎯 Gerar Fechamento ({manualNumbers.length >= lottery.pick
+                    ? `${manualNumbers.length} dezenas → garantir ${CLOSING_CONFIG[activeLottery].label}`
+                    : "selecione mais dezenas"})
                 </button>
               </div>
             )}
