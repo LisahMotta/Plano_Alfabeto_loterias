@@ -109,6 +109,22 @@ const LOTTERIES = {
     description: "7 de 31 · 4 grupos",
     apiSlug: "dia-de-sorte",
   },
+  supersete: {
+    name: "Super Sete",
+    icon: "7️⃣",
+    range: [0, 9],
+    pick: 7,
+    groups: {
+      "C1": range(0,9), "C2": range(0,9), "C3": range(0,9), "C4": range(0,9),
+      "C5": range(0,9), "C6": range(0,9), "C7": range(0,9),
+    },
+    color: "#2D6B8E",
+    colorLight: "#E8F4F9",
+    defaultDistribution: { "C1": 1, "C2": 1, "C3": 1, "C4": 1, "C5": 1, "C6": 1, "C7": 1 },
+    description: "7 colunas · 0 a 9 cada",
+    apiSlug: "super-sete",
+    isColumnBased: true,
+  },
   maismilionaria: {
     name: "+Milionária",
     icon: "💎",
@@ -139,6 +155,19 @@ const shuffle = (arr) => {
 };
 
 const generateGame = (lottery, distribution) => {
+  // Super Sete: each group is a column, pick independently (numbers CAN repeat across columns)
+  if (lottery.isColumnBased) {
+    const columns = {};
+    Object.keys(lottery.groups).forEach((key) => {
+      const count = distribution[key] || 0;
+      if (count > 0) {
+        const shuffled = shuffle(lottery.groups[key]);
+        columns[key] = shuffled.slice(0, count);
+      }
+    });
+    return { columns, isColumnBased: true };
+  }
+
   const game = [];
   const groupKeys = Object.keys(lottery.groups);
   groupKeys.forEach((key) => {
@@ -297,19 +326,22 @@ function GroupCard({ letter, numbers, count, onCountChange, color, maxCount }) {
 }
 
 function GameCard({ game, index, color, lottery, onRemove }) {
-  // Handle both formats: array or { numbers, trevos }
-  const numbers = Array.isArray(game) ? game : game.numbers;
-  const trevos = Array.isArray(game) ? null : game.trevos;
+  // Handle 3 formats: array, { numbers, trevos }, { columns, isColumnBased }
+  const isCol = game && game.isColumnBased;
+  const numbers = isCol ? Object.values(game.columns).flat() : (Array.isArray(game) ? game : game.numbers);
+  const trevos = (!isCol && !Array.isArray(game)) ? game.trevos : null;
   const analysis = analyzeGame(numbers);
   const groupKeys = Object.keys(lottery.groups);
 
-  const groupDistText = groupKeys
-    .map((k) => {
-      const count = numbers.filter((n) => lottery.groups[k].includes(n)).length;
-      return count > 0 ? `${k}:${count}` : null;
-    })
-    .filter(Boolean)
-    .join(" · ");
+  const groupDistText = isCol
+    ? Object.entries(game.columns).map(([k, v]) => `${k}:${v.join(",")}`).join(" · ")
+    : groupKeys
+        .map((k) => {
+          const count = numbers.filter((n) => lottery.groups[k].includes(n)).length;
+          return count > 0 ? `${k}:${count}` : null;
+        })
+        .filter(Boolean)
+        .join(" · ");
 
   return (
     <div
@@ -336,11 +368,24 @@ function GameCard({ game, index, color, lottery, onRemove }) {
       <div style={{ fontSize: 11, fontWeight: 700, color, marginBottom: 10, fontFamily: "'JetBrains Mono', monospace" }}>
         JOGO #{index + 1}
       </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: trevos ? 8 : 12 }}>
-        {numbers.map((n) => (
-          <NumberBall key={n} number={n} color={color} size="md" highlight />
-        ))}
-      </div>
+      {isCol ? (
+        <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+          {Object.entries(game.columns).map(([col, vals]) => (
+            <div key={col} style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: "#999", marginBottom: 3, fontFamily: "'JetBrains Mono', monospace" }}>{col}</div>
+              {vals.map((n, i) => (
+                <NumberBall key={`${col}-${i}`} number={n} color={color} size="md" highlight />
+              ))}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: trevos ? 8 : 12 }}>
+          {numbers.map((n, i) => (
+            <NumberBall key={`${n}-${i}`} number={n} color={color} size="md" highlight />
+          ))}
+        </div>
+      )}
       {trevos && (
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: "#B8860B", fontFamily: "'JetBrains Mono', monospace" }}>

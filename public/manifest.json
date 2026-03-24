@@ -42,6 +42,12 @@
       "short_name": "Quina",
       "url": "/?loteria=quina",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Super Sete",
+      "short_name": "Super Sete",
+      "url": "/?loteria=supersete",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }
