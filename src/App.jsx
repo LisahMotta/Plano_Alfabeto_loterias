@@ -1,7 +1,117 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 // Helper to generate number range array
 const range = (start, end) => Array.from({ length: end - start + 1 }, (_, i) => start + i);
+
+// Push notification helper
+const requestNotificationPermission = async () => {
+  if (!("Notification" in window)) return false;
+  if (Notification.permission === "granted") return true;
+  const result = await Notification.requestPermission();
+  return result === "granted";
+};
+
+const sendNotification = (title, body, icon = "/icon-192.png") => {
+  if (Notification.permission === "granted") {
+    new Notification(title, { body, icon, badge: icon });
+  }
+};
+
+// Gerador de fechamento para garantir ao menos 1 terno
+// Dado N dezenas escolhidas, gera combinações de K números
+// cobrindo todas as combinações de 3 (ternos possíveis)
+const generateTernoClosing = (selectedNumbers, pickSize) => {
+  const nums = [...selectedNumbers].sort((a, b) => a - b);
+  const n = nums.length;
+  if (n < pickSize) return [];
+
+  // Gera todas as combinações de pickSize a partir dos números selecionados
+  const combinations = [];
+  const combine = (start, current) => {
+    if (current.length === pickSize) {
+      combinations.push([...current]);
+      return;
+    }
+    for (let i = start; i < n; i++) {
+      current.push(nums[i]);
+      combine(i + 1, current);
+      current.pop();
+    }
+  };
+  combine(0, []);
+
+  // Gera todos os ternos possíveis
+  const ternos = new Set();
+  for (let i = 0; i < n - 2; i++) {
+    for (let j = i + 1; j < n - 1; j++) {
+      for (let k = j + 1; k < n; k++) {
+        ternos.add(`${nums[i]},${nums[j]},${nums[k]}`);
+      }
+    }
+  }
+
+  // Greedy set cover: seleciona jogos que cobrem mais ternos não cobertos
+  const coveredTernos = new Set();
+  const selectedGames = [];
+
+  // Calcula ternos por combinação
+  const ternosByCombo = combinations.map((combo) => {
+    const ts = new Set();
+    for (let i = 0; i < combo.length - 2; i++) {
+      for (let j = i + 1; j < combo.length - 1; j++) {
+        for (let k = j + 1; k < combo.length; k++) {
+          ts.add(`${combo[i]},${combo[j]},${combo[k]}`);
+        }
+      }
+    }
+    return { combo, ternos: ts };
+  });
+
+  while (coveredTernos.size < ternos.size && selectedGames.length < 200) {
+    let bestIdx = -1;
+    let bestNew = 0;
+
+    for (let i = 0; i < ternosByCombo.length; i++) {
+      let newCount = 0;
+      for (const t of ternosByCombo[i].ternos) {
+        if (!coveredTernos.has(t)) newCount++;
+      }
+      if (newCount > bestNew) {
+        bestNew = newCount;
+        bestIdx = i;
+      }
+    }
+
+    if (bestIdx === -1 || bestNew === 0) break;
+
+    selectedGames.push(ternosByCombo[bestIdx].combo);
+    for (const t of ternosByCombo[bestIdx].ternos) {
+      coveredTernos.add(t);
+    }
+    ternosByCombo.splice(bestIdx, 1);
+  }
+
+  return selectedGames;
+};
+
+// Export games as text for sharing
+const gamesToText = (entry, lottery) => {
+  let text = `${lottery.icon} ${lottery.name} — Concurso: ${entry.concurso}\n`;
+  text += `Salvo em: ${entry.savedAt}\n`;
+  text += `${"─".repeat(30)}\n`;
+  entry.games.forEach((game, i) => {
+    const isCol = game && game.isColumnBased;
+    const nums = isCol
+      ? Object.entries(game.columns).map(([c, v]) => `${c}:${v.join(",")}`).join(" | ")
+      : (Array.isArray(game) ? game : game.numbers).map((n) => String(n).padStart(2, "0")).join(" - ");
+    const trevos = (!isCol && !Array.isArray(game) && game.trevos)
+      ? ` | Trevos: ${game.trevos.join(", ")}` : "";
+    text += `Jogo ${i + 1}: ${nums}${trevos}\n`;
+  });
+  return text;
+};
 
 const LOTTERIES = {
   lotofacil: {
@@ -743,6 +853,7 @@ export default function PlanoAlfabetoApp() {
       setShowInstallBanner(true);
     };
     window.addEventListener('beforeinstallprompt', handler);
+    requestNotificationPermission();
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
@@ -1058,6 +1169,89 @@ export default function PlanoAlfabetoApp() {
               )}
             </div>
 
+            {/* Fechamento Terno - Mega-Sena e Quina */}
+            {(activeLottery === "megasena" || activeLottery === "quina") && (
+              <div style={{
+                marginBottom: 20, padding: 16, borderRadius: 14,
+                background: `${lottery.color}06`, border: `1.5px solid ${lottery.color}20`,
+              }}>
+                <h4 style={{ fontFamily: "'Fraunces', serif", fontSize: 16, fontWeight: 700, color: lottery.color, margin: "0 0 8px" }}>
+                  🎯 Fechamento Terno
+                </h4>
+                <p style={{ fontSize: 13, color: "#666", margin: "0 0 12px", lineHeight: 1.5 }}>
+                  Escolha dezenas e gere o menor número de jogos que garante ao menos <strong>1 terno</strong> se
+                  3 das suas dezenas forem sorteadas.
+                  {activeLottery === "megasena" ? " (Recomendado: 8 a 12 dezenas)" : " (Recomendado: 7 a 10 dezenas)"}
+                </p>
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#444", marginBottom: 6 }}>
+                    Selecione suas dezenas:
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                    {range(lottery.range[0], Math.min(lottery.range[1], 80)).map((n) => {
+                      const sel = (manualNumbers || []).includes(n);
+                      return (
+                        <div
+                          key={n}
+                          onClick={() => {
+                            setManualNumbers((prev) => {
+                              if (prev.includes(n)) return prev.filter((x) => x !== n);
+                              if (prev.length >= 15) return prev;
+                              return [...prev, n].sort((a, b) => a - b);
+                            });
+                          }}
+                          style={{
+                            width: 32, height: 32, borderRadius: "50%",
+                            background: sel ? lottery.color : `${lottery.color}10`,
+                            border: sel ? "none" : `1.5px solid ${lottery.color}30`,
+                            color: sel ? "#fff" : lottery.color,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            fontSize: 12, fontWeight: 700, cursor: "pointer",
+                            fontFamily: "'JetBrains Mono', monospace",
+                          }}
+                        >
+                          {String(n).padStart(2, "0")}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ fontSize: 12, color: "#888", marginTop: 6 }}>
+                    {manualNumbers.length} dezena(s) selecionada(s)
+                    {manualNumbers.length < lottery.pick && ` (mínimo ${lottery.pick})`}
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    if (manualNumbers.length < lottery.pick) {
+                      alert(`Selecione ao menos ${lottery.pick} dezenas.`);
+                      return;
+                    }
+                    if (manualNumbers.length > 15) {
+                      alert("Máximo de 15 dezenas para fechamento (muitas combinações acima disso).");
+                      return;
+                    }
+                    const games = generateTernoClosing(manualNumbers, lottery.pick);
+                    if (games.length === 0) {
+                      alert("Não foi possível gerar o fechamento.");
+                      return;
+                    }
+                    setGeneratedGames(games);
+                  }}
+                  disabled={manualNumbers.length < lottery.pick}
+                  style={{
+                    padding: "10px 24px", borderRadius: 10,
+                    border: "none",
+                    background: manualNumbers.length >= lottery.pick ? "#D4540F" : "#ccc",
+                    color: "#fff", fontWeight: 700, fontSize: 14,
+                    cursor: manualNumbers.length >= lottery.pick ? "pointer" : "not-allowed",
+                    fontFamily: "'DM Sans', sans-serif",
+                  }}
+                >
+                  🎯 Gerar Fechamento Terno ({manualNumbers.length >= lottery.pick ? "calcular" : "selecione mais"})
+                </button>
+              </div>
+            )}
+
             {/* Generated games */}
             {generatedGames.length > 0 && (
               <div>
@@ -1309,7 +1503,7 @@ export default function PlanoAlfabetoApp() {
               const entryColor = entryLottery.color;
 
               return (
-                <div key={entry.id} style={{
+                <div key={entry.id} id={`saved-entry-${entry.id}`} style={{
                   background: "#fff", borderRadius: 16, padding: 18,
                   border: `1px solid ${entryColor}25`,
                   boxShadow: `0 2px 12px ${entryColor}08`,
@@ -1404,6 +1598,105 @@ export default function PlanoAlfabetoApp() {
                     );
                   })}
 
+                  {/* Share & Export buttons */}
+                  <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                    {/* Compartilhar via Web Share API ou copiar */}
+                    <button
+                      onClick={async () => {
+                        const text = gamesToText(entry, entryLottery);
+                        if (navigator.share) {
+                          try {
+                            await navigator.share({ title: `${entryLottery.name} - Plano Alfabeto`, text });
+                          } catch {}
+                        } else {
+                          await navigator.clipboard.writeText(text);
+                          alert("Jogos copiados para a área de transferência!");
+                        }
+                      }}
+                      style={{
+                        flex: 1, padding: "8px 12px", borderRadius: 8,
+                        border: `1.5px solid ${entryColor}40`, background: `${entryColor}08`,
+                        color: entryColor, fontWeight: 600, fontSize: 12, cursor: "pointer",
+                      }}
+                    >
+                      📤 Compartilhar
+                    </button>
+
+                    {/* Exportar PDF */}
+                    <button
+                      onClick={() => {
+                        const doc = new jsPDF();
+                        const lottery = entryLottery;
+                        doc.setFontSize(18);
+                        doc.text(`${lottery.name} - Plano Alfabeto`, 20, 20);
+                        doc.setFontSize(11);
+                        doc.text(`Concurso: ${entry.concurso} | Salvo em: ${entry.savedAt}`, 20, 30);
+                        doc.setLineWidth(0.5);
+                        doc.line(20, 34, 190, 34);
+
+                        let y = 44;
+                        entry.games.forEach((game, i) => {
+                          if (y > 270) { doc.addPage(); y = 20; }
+                          const isCol = game && game.isColumnBased;
+                          const nums = isCol
+                            ? Object.entries(game.columns).map(([c, v]) => `${c}:${v.join(",")}`).join("  ")
+                            : (Array.isArray(game) ? game : game.numbers).map((n) => String(n).padStart(2, "0")).join(" - ");
+                          const trevos = (!isCol && !Array.isArray(game) && game.trevos)
+                            ? `  Trevos: ${game.trevos.join(", ")}` : "";
+
+                          doc.setFontSize(10);
+                          doc.setFont(undefined, "bold");
+                          doc.text(`Jogo #${i + 1}`, 20, y);
+                          doc.setFont(undefined, "normal");
+                          doc.text(nums + trevos, 44, y);
+
+                          if (entry.checkResult && entry.checkResult[i]) {
+                            const r = entry.checkResult[i];
+                            doc.setFontSize(9);
+                            const status = r.premiado ? `PREMIADO - ${r.faixa} (${r.acertos} acertos)` : `${r.acertos} acerto(s)`;
+                            doc.text(status, 20, y + 5);
+                            y += 12;
+                          } else {
+                            y += 8;
+                          }
+                        });
+
+                        doc.setFontSize(8);
+                        doc.text("Gerado por Plano Alfabeto - Ferramenta de organização", 20, 290);
+                        doc.save(`plano-alfabeto-${entry.lotteryKey}-${entry.concurso}.pdf`);
+                      }}
+                      style={{
+                        flex: 1, padding: "8px 12px", borderRadius: 8,
+                        border: "1.5px solid #E53E3E40", background: "#FFF5F5",
+                        color: "#C53030", fontWeight: 600, fontSize: 12, cursor: "pointer",
+                      }}
+                    >
+                      📄 PDF
+                    </button>
+
+                    {/* Exportar Imagem */}
+                    <button
+                      onClick={async () => {
+                        const el = document.getElementById(`saved-entry-${entry.id}`);
+                        if (!el) return;
+                        try {
+                          const canvas = await html2canvas(el, { backgroundColor: "#fff", scale: 2 });
+                          const link = document.createElement("a");
+                          link.download = `plano-alfabeto-${entry.lotteryKey}-${entry.concurso}.jpg`;
+                          link.href = canvas.toDataURL("image/jpeg", 0.9);
+                          link.click();
+                        } catch { alert("Erro ao gerar imagem."); }
+                      }}
+                      style={{
+                        flex: 1, padding: "8px 12px", borderRadius: 8,
+                        border: "1.5px solid #2D6B8E40", background: "#E8F4F9",
+                        color: "#2D6B8E", fontWeight: 600, fontSize: 12, cursor: "pointer",
+                      }}
+                    >
+                      🖼 Imagem
+                    </button>
+                  </div>
+
                   {/* Check button */}
                   {!entry.checked ? (
                     <button
@@ -1438,6 +1731,17 @@ export default function PlanoAlfabetoApp() {
                         const results = entry.games.map((game) =>
                           checkGame(game, dezenas, entry.lotteryKey)
                         );
+
+                        const premiados = results.filter((r) => r.premiado);
+                        if (premiados.length > 0) {
+                          const melhor = premiados.find((r) => r.principal);
+                          sendNotification(
+                            `🏆 ${entryLottery.icon} Jogo Premiado!`,
+                            melhor
+                              ? `Você acertou a faixa principal: ${melhor.faixa}!`
+                              : `${premiados.length} jogo(s) premiado(s) — ${premiados[0].faixa}`,
+                          );
+                        }
 
                         setSavedGames((prev) => prev.map((e) =>
                           e.id === entry.id
