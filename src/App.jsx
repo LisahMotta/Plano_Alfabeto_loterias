@@ -1574,10 +1574,15 @@ export default function PlanoAlfabetoApp() {
                         Concurso: {entry.concurso}
                       </span>
                     </div>
-                    <button onClick={() => deleteSavedEntry(entry.id)} style={{
-                      background: "none", border: "none", cursor: "pointer",
-                      color: "#ccc", fontSize: 18, fontWeight: 700,
-                    }}>×</button>
+                    <button onClick={() => {
+                      if (confirm(`Excluir jogos de ${entry.lotteryName} (Concurso: ${entry.concurso})?`)) {
+                        deleteSavedEntry(entry.id);
+                      }
+                    }} style={{
+                      padding: "4px 10px", borderRadius: 6, border: "1px solid #E53E3E40",
+                      background: "#FFF5F5", color: "#E53E3E", fontSize: 11,
+                      fontWeight: 600, cursor: "pointer",
+                    }}>🗑 Excluir</button>
                   </div>
 
                   <div style={{ fontSize: 11, color: "#999", marginBottom: 10 }}>
