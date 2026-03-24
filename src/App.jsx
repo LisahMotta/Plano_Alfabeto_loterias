@@ -145,6 +145,104 @@ const LOTTERIES = {
   },
 };
 
+// Faixas de premiação por loteria (mínimo de acertos para prêmio)
+const PRIZE_TIERS = {
+  lotofacil: [
+    { acertos: 15, faixa: "15 acertos", principal: true },
+    { acertos: 14, faixa: "14 acertos" },
+    { acertos: 13, faixa: "13 acertos" },
+    { acertos: 12, faixa: "12 acertos" },
+    { acertos: 11, faixa: "11 acertos" },
+  ],
+  megasena: [
+    { acertos: 6, faixa: "Sena", principal: true },
+    { acertos: 5, faixa: "Quina" },
+    { acertos: 4, faixa: "Quadra" },
+  ],
+  quina: [
+    { acertos: 5, faixa: "Quina", principal: true },
+    { acertos: 4, faixa: "Quadra" },
+    { acertos: 3, faixa: "Terno" },
+    { acertos: 2, faixa: "Duque" },
+  ],
+  lotomania: [
+    { acertos: 20, faixa: "20 acertos", principal: true },
+    { acertos: 19, faixa: "19 acertos" },
+    { acertos: 18, faixa: "18 acertos" },
+    { acertos: 17, faixa: "17 acertos" },
+    { acertos: 16, faixa: "16 acertos" },
+    { acertos: 15, faixa: "15 acertos" },
+    { acertos: 0, faixa: "0 acertos" },
+  ],
+  timemania: [
+    { acertos: 7, faixa: "7 acertos", principal: true },
+    { acertos: 6, faixa: "6 acertos" },
+    { acertos: 5, faixa: "5 acertos" },
+    { acertos: 4, faixa: "4 acertos" },
+    { acertos: 3, faixa: "3 acertos" },
+  ],
+  duplasena: [
+    { acertos: 6, faixa: "Sena", principal: true },
+    { acertos: 5, faixa: "Quina" },
+    { acertos: 4, faixa: "Quadra" },
+    { acertos: 3, faixa: "Terno" },
+  ],
+  diadesorte: [
+    { acertos: 7, faixa: "7 acertos", principal: true },
+    { acertos: 6, faixa: "6 acertos" },
+    { acertos: 5, faixa: "5 acertos" },
+    { acertos: 4, faixa: "4 acertos" },
+  ],
+  supersete: [
+    { acertos: 7, faixa: "7 colunas", principal: true },
+    { acertos: 6, faixa: "6 colunas" },
+    { acertos: 5, faixa: "5 colunas" },
+    { acertos: 4, faixa: "4 colunas" },
+    { acertos: 3, faixa: "3 colunas" },
+  ],
+  maismilionaria: [
+    { acertos: 6, faixa: "6 + 2 trevos", principal: true },
+    { acertos: 6, faixa: "6 + 1 trevo" },
+    { acertos: 6, faixa: "6 + 0 trevos" },
+    { acertos: 5, faixa: "5 + 2 trevos" },
+    { acertos: 5, faixa: "5 + 1 trevo" },
+    { acertos: 4, faixa: "4 + 2 trevos" },
+  ],
+};
+
+// Função para verificar acertos
+const checkGame = (game, resultDezenas, lotteryKey) => {
+  const resultNums = (resultDezenas || []).map((d) => parseInt(d));
+  let numbers, acertos;
+
+  if (game && game.isColumnBased) {
+    // Super Sete: comparar coluna a coluna
+    const cols = game.columns;
+    acertos = 0;
+    Object.keys(cols).forEach((col, idx) => {
+      if (cols[col] && resultNums[idx] !== undefined && cols[col].includes(resultNums[idx])) {
+        acertos++;
+      }
+    });
+    numbers = Object.values(cols).flat();
+  } else {
+    numbers = Array.isArray(game) ? game : (game.numbers || []);
+    acertos = numbers.filter((n) => resultNums.includes(n)).length;
+  }
+
+  const tiers = PRIZE_TIERS[lotteryKey] || [];
+  const prize = tiers.find((t) => t.acertos === acertos);
+
+  return {
+    acertos,
+    total: Array.isArray(game) ? game.length : (game.isColumnBased ? 7 : (game.numbers || []).length),
+    premiado: !!prize,
+    faixa: prize ? prize.faixa : null,
+    principal: prize ? prize.principal : false,
+    numbersMatched: numbers.filter((n) => resultNums.includes(n)),
+  };
+};
+
 const shuffle = (arr) => {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -599,6 +697,43 @@ export default function PlanoAlfabetoApp() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [installPrompt, setInstallPrompt] = useState(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [savedGames, setSavedGames] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("planoAlfabeto_savedGames") || "[]");
+    } catch { return []; }
+  });
+
+  // Persist saved games
+  useEffect(() => {
+    try {
+      localStorage.setItem("planoAlfabeto_savedGames", JSON.stringify(savedGames));
+    } catch {}
+  }, [savedGames]);
+
+  const saveGames = useCallback((games, lotteryKey, concurso = "") => {
+    const entry = {
+      id: Date.now(),
+      lotteryKey,
+      lotteryName: LOTTERIES[lotteryKey].name,
+      lotteryIcon: LOTTERIES[lotteryKey].icon,
+      concurso: concurso || "Sem concurso",
+      games: games,
+      savedAt: new Date().toLocaleString("pt-BR"),
+      checked: false,
+      checkResult: null,
+    };
+    setSavedGames((prev) => [entry, ...prev]);
+  }, []);
+
+  const deleteSavedEntry = useCallback((id) => {
+    setSavedGames((prev) => prev.filter((e) => e.id !== id));
+  }, []);
+
+  const clearAllSaved = useCallback(() => {
+    if (confirm("Tem certeza que deseja apagar todos os jogos salvos?")) {
+      setSavedGames([]);
+    }
+  }, []);
 
   // PWA install prompt
   useEffect(() => {
@@ -804,6 +939,9 @@ export default function PlanoAlfabetoApp() {
         <Tab active={activeTab === "results"} onClick={() => setActiveTab("results")} color={lottery.color}>
           📊 Resultados
         </Tab>
+        <Tab active={activeTab === "saved"} onClick={() => setActiveTab("saved")} color={lottery.color}>
+          💾 Meus Jogos{savedGames.length > 0 ? ` (${savedGames.length})` : ""}
+        </Tab>
       </div>
 
       {/* Content */}
@@ -923,9 +1061,27 @@ export default function PlanoAlfabetoApp() {
             {/* Generated games */}
             {generatedGames.length > 0 && (
               <div>
-                <h3 style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 700, color: "#222", marginBottom: 12 }}>
-                  {lottery.icon} Jogos Gerados ({generatedGames.length})
-                </h3>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+                  <h3 style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 700, color: "#222", margin: 0 }}>
+                    {lottery.icon} Jogos Gerados ({generatedGames.length})
+                  </h3>
+                  <button
+                    onClick={() => {
+                      const concurso = prompt("Para qual concurso são esses jogos? (opcional)") || "";
+                      saveGames(generatedGames, activeLottery, concurso);
+                      alert(`${generatedGames.length} jogo(s) salvos!`);
+                    }}
+                    style={{
+                      padding: "8px 18px", borderRadius: 10,
+                      border: `2px solid ${lottery.color}`,
+                      background: `${lottery.color}10`, color: lottery.color,
+                      fontWeight: 700, fontSize: 13, cursor: "pointer",
+                      fontFamily: "'DM Sans', sans-serif",
+                    }}
+                  >
+                    💾 Salvar Jogos
+                  </button>
+                </div>
                 <div style={{
                   display: "grid",
                   gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
@@ -1117,6 +1273,241 @@ export default function PlanoAlfabetoApp() {
 
         {/* RESULTS TAB */}
         {activeTab === "results" && <ResultsPanel color={lottery.color} />}
+
+        {/* SAVED GAMES TAB */}
+        {activeTab === "saved" && (
+          <div style={{ padding: "4px 0" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h3 style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 700, color: "#222", margin: 0 }}>
+                Meus Jogos Salvos
+              </h3>
+              {savedGames.length > 0 && (
+                <button onClick={clearAllSaved} style={{
+                  padding: "6px 14px", borderRadius: 8, border: "1px solid #E53E3E",
+                  background: "#FFF5F5", color: "#E53E3E", fontWeight: 600,
+                  fontSize: 12, cursor: "pointer",
+                }}>
+                  🗑 Limpar Tudo
+                </button>
+              )}
+            </div>
+
+            {savedGames.length === 0 && (
+              <div style={{
+                textAlign: "center", padding: 40, color: "#999", fontSize: 14,
+              }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>💾</div>
+                Nenhum jogo salvo ainda.
+                <br />
+                Gere jogos na aba Automático e clique em "Salvar Jogos".
+              </div>
+            )}
+
+            {savedGames.map((entry) => {
+              const entryLottery = LOTTERIES[entry.lotteryKey];
+              if (!entryLottery) return null;
+              const entryColor = entryLottery.color;
+
+              return (
+                <div key={entry.id} style={{
+                  background: "#fff", borderRadius: 16, padding: 18,
+                  border: `1px solid ${entryColor}25`,
+                  boxShadow: `0 2px 12px ${entryColor}08`,
+                  marginBottom: 14,
+                }}>
+                  {/* Header */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <div>
+                      <span style={{ fontSize: 16 }}>{entry.lotteryIcon}</span>{" "}
+                      <span style={{ fontWeight: 700, color: entryColor, fontSize: 15 }}>{entry.lotteryName}</span>
+                      <span style={{
+                        marginLeft: 8, padding: "2px 10px", borderRadius: 8,
+                        background: `${entryColor}12`, color: entryColor,
+                        fontSize: 12, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace",
+                      }}>
+                        Concurso: {entry.concurso}
+                      </span>
+                    </div>
+                    <button onClick={() => deleteSavedEntry(entry.id)} style={{
+                      background: "none", border: "none", cursor: "pointer",
+                      color: "#ccc", fontSize: 18, fontWeight: 700,
+                    }}>×</button>
+                  </div>
+
+                  <div style={{ fontSize: 11, color: "#999", marginBottom: 10 }}>
+                    Salvo em {entry.savedAt} · {entry.games.length} jogo(s)
+                  </div>
+
+                  {/* Games list */}
+                  {entry.games.map((game, gi) => {
+                    const isCol = game && game.isColumnBased;
+                    const nums = isCol ? Object.values(game.columns).flat() : (Array.isArray(game) ? game : (game.numbers || []));
+                    const trevos = (!isCol && !Array.isArray(game)) ? game.trevos : null;
+                    const result = entry.checkResult ? entry.checkResult[gi] : null;
+
+                    return (
+                      <div key={gi} style={{
+                        padding: 12, borderRadius: 10, marginBottom: 8,
+                        background: result
+                          ? (result.premiado ? (result.principal ? "#F0FFF4" : "#FFFFF0") : "#FAFAFA")
+                          : "#FAFAFA",
+                        border: result && result.premiado
+                          ? `2px solid ${result.principal ? "#38A169" : "#D69E2E"}`
+                          : "1px solid #eee",
+                      }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: entryColor, marginBottom: 6, fontFamily: "'JetBrains Mono', monospace" }}>
+                          JOGO #{gi + 1}
+                        </div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
+                          {nums.map((n, ni) => {
+                            const matched = result ? result.numbersMatched.includes(n) : false;
+                            return (
+                              <div key={ni} style={{
+                                width: 30, height: 30, borderRadius: "50%",
+                                background: matched ? "#38A169" : (result ? "#E2E8F0" : `${entryColor}18`),
+                                border: matched ? "none" : `1.5px solid ${result ? "#CBD5E0" : entryColor + "40"}`,
+                                color: matched ? "#fff" : (result ? "#666" : entryColor),
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                fontSize: 12, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace",
+                              }}>
+                                {String(n).padStart(2, "0")}
+                              </div>
+                            );
+                          })}
+                          {trevos && (
+                            <>
+                              <div style={{ width: 1, background: "#ddd", margin: "0 4px" }} />
+                              {trevos.map((t) => (
+                                <div key={`t${t}`} style={{
+                                  width: 30, height: 30, borderRadius: "50%",
+                                  background: "#B8860B", color: "#fff",
+                                  display: "flex", alignItems: "center", justifyContent: "center",
+                                  fontSize: 12, fontWeight: 700,
+                                }}>
+                                  {t}
+                                </div>
+                              ))}
+                            </>
+                          )}
+                        </div>
+                        {result && (
+                          <div style={{
+                            fontSize: 12, fontWeight: 600, marginTop: 4,
+                            color: result.premiado ? (result.principal ? "#276749" : "#975A16") : "#888",
+                          }}>
+                            {result.premiado
+                              ? `🏆 ${result.acertos} acertos — ${result.faixa}!`
+                              : `${result.acertos} acerto(s) — não premiado`}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {/* Check button */}
+                  {!entry.checked ? (
+                    <button
+                      onClick={async () => {
+                        const API_SOURCES = [
+                          { url: (s) => `https://api.guidi.dev.br/loteria/${s}/ultimo`,
+                            slugMap: { "mega-sena":"megasena","lotofacil":"lotofacil","quina":"quina","lotomania":"lotomania","timemania":"timemania","dupla-sena":"duplasena","dia-de-sorte":"diadesorte","super-sete":"supersete","mais-milionaria":"maismilionaria" }},
+                          { url: (s) => `https://loteriascaixa-api.herokuapp.com/api/${s}/latest`,
+                            slugMap: { "mega-sena":"mega-sena","lotofacil":"lotofacil","quina":"quina","lotomania":"lotomania","timemania":"timemania","dupla-sena":"dupla-sena","dia-de-sorte":"dia-de-sorte","super-sete":"super-sete","mais-milionaria":"mais-milionaria" }},
+                        ];
+                        const baseSlug = entryLottery.apiSlug;
+                        let dezenas = null;
+                        let concurso = null;
+
+                        for (const src of API_SOURCES) {
+                          try {
+                            const slug = src.slugMap[baseSlug] || baseSlug;
+                            const res = await fetch(src.url(slug), { signal: AbortSignal.timeout(8000) });
+                            if (!res.ok) continue;
+                            const data = await res.json();
+                            dezenas = data.dezenas || data.listaDezenas || data.resultado;
+                            concurso = data.concurso || data.numero;
+                            if (dezenas && dezenas.length > 0) break;
+                          } catch { continue; }
+                        }
+
+                        if (!dezenas) {
+                          alert("Não foi possível buscar o resultado. Tente novamente.");
+                          return;
+                        }
+
+                        const results = entry.games.map((game) =>
+                          checkGame(game, dezenas, entry.lotteryKey)
+                        );
+
+                        setSavedGames((prev) => prev.map((e) =>
+                          e.id === entry.id
+                            ? { ...e, checked: true, checkResult: results, checkedConcurso: concurso, checkedDezenas: dezenas }
+                            : e
+                        ));
+                      }}
+                      style={{
+                        width: "100%", padding: "12px 20px", borderRadius: 10,
+                        border: "none", background: entryColor, color: "#fff",
+                        fontWeight: 700, fontSize: 14, cursor: "pointer",
+                        fontFamily: "'DM Sans', sans-serif",
+                        boxShadow: `0 4px 16px ${entryColor}30`,
+                        marginTop: 8,
+                      }}
+                    >
+                      🔍 Conferir com Último Resultado
+                    </button>
+                  ) : (
+                    <div style={{
+                      marginTop: 8, padding: 12, borderRadius: 10,
+                      background: `${entryColor}08`, border: `1px solid ${entryColor}20`,
+                    }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "#666", marginBottom: 6 }}>
+                        ✅ Conferido com concurso #{entry.checkedConcurso}
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 8 }}>
+                        <span style={{ fontSize: 11, color: "#888", marginRight: 4 }}>Dezenas sorteadas:</span>
+                        {(entry.checkedDezenas || []).map((d, i) => (
+                          <span key={i} style={{
+                            padding: "2px 6px", borderRadius: 6,
+                            background: entryColor, color: "#fff",
+                            fontSize: 11, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace",
+                          }}>
+                            {String(d).padStart(2, "0")}
+                          </span>
+                        ))}
+                      </div>
+                      {(() => {
+                        const totalPremiados = entry.checkResult.filter((r) => r.premiado).length;
+                        const melhorFaixa = entry.checkResult.find((r) => r.principal);
+                        return (
+                          <div style={{ fontSize: 13, fontWeight: 700, color: totalPremiados > 0 ? "#276749" : "#888" }}>
+                            {totalPremiados > 0
+                              ? `🏆 ${totalPremiados} jogo(s) premiado(s)!${melhorFaixa ? " Incluindo prêmio principal!" : ""}`
+                              : "Nenhum jogo premiado neste concurso."}
+                          </div>
+                        );
+                      })()}
+                      <button
+                        onClick={() => {
+                          setSavedGames((prev) => prev.map((e) =>
+                            e.id === entry.id ? { ...e, checked: false, checkResult: null } : e
+                          ));
+                        }}
+                        style={{
+                          marginTop: 8, padding: "6px 14px", borderRadius: 8,
+                          border: "1px solid #ddd", background: "#fff",
+                          color: "#666", fontWeight: 600, fontSize: 12, cursor: "pointer",
+                        }}
+                      >
+                        🔄 Conferir novamente
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Footer */}
