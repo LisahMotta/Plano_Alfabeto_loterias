@@ -422,19 +422,62 @@ function ResultsPanel({ color }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Slugs differ between APIs
+  const API_SOURCES = [
+    {
+      name: "guidi",
+      url: (slug) => `https://api.guidi.dev.br/loteria/${slug}/ultimo`,
+      slugMap: {
+        "mega-sena": "megasena", "lotofacil": "lotofacil", "quina": "quina",
+        "lotomania": "lotomania", "timemania": "timemania", "dupla-sena": "duplasena",
+        "dia-de-sorte": "diadesorte", "super-sete": "supersete", "mais-milionaria": "maismilionaria",
+      },
+      normalize: (data) => ({
+        concurso: data.concurso || data.numero,
+        data: data.data || data.dataApuracao,
+        dezenas: data.dezenas || data.listaDezenas || data.resultado,
+      }),
+    },
+    {
+      name: "herokuapp",
+      url: (slug) => `https://loteriascaixa-api.herokuapp.com/api/${slug}/latest`,
+      slugMap: {
+        "mega-sena": "mega-sena", "lotofacil": "lotofacil", "quina": "quina",
+        "lotomania": "lotomania", "timemania": "timemania", "dupla-sena": "dupla-sena",
+        "dia-de-sorte": "dia-de-sorte", "super-sete": "super-sete", "mais-milionaria": "mais-milionaria",
+      },
+      normalize: (data) => ({
+        concurso: data.concurso,
+        data: data.data,
+        dezenas: data.dezenas,
+      }),
+    },
+  ];
+
   const fetchResults = async () => {
     setLoading(true);
     setError(null);
-    try {
-      const slug = LOTTERIES[searchLottery].apiSlug;
-      const res = await fetch(`https://loteriascaixa-api.herokuapp.com/api/${slug}/latest`);
-      if (!res.ok) throw new Error("Erro na API");
-      const data = await res.json();
-      setResults(data);
-    } catch {
-      setError("Não foi possível carregar os resultados. A API pode estar indisponível.");
-      setResults(null);
+    const baseSlug = LOTTERIES[searchLottery].apiSlug;
+
+    for (const source of API_SOURCES) {
+      try {
+        const slug = source.slugMap[baseSlug] || baseSlug;
+        const res = await fetch(source.url(slug), { signal: AbortSignal.timeout(8000) });
+        if (!res.ok) continue;
+        const data = await res.json();
+        const normalized = source.normalize(data);
+        if (normalized.dezenas && normalized.dezenas.length > 0) {
+          setResults(normalized);
+          setLoading(false);
+          return;
+        }
+      } catch {
+        continue;
+      }
     }
+
+    setError("Não foi possível carregar. Tente novamente em alguns segundos.");
+    setResults(null);
     setLoading(false);
   };
 
