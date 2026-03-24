@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 
 const LOTTERIES = {
   lotofacil: {
@@ -421,6 +421,42 @@ export default function PlanoAlfabetoApp() {
   const [generatedGames, setGeneratedGames] = useState([]);
   const [gameCount, setGameCount] = useState(5);
   const [manualNumbers, setManualNumbers] = useState([]);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [installPrompt, setInstallPrompt] = useState(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+
+  // PWA install prompt
+  useEffect(() => {
+    const handler = (e) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+      setShowInstallBanner(true);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  // Online/offline detection
+  useEffect(() => {
+    const goOnline = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => {
+      window.removeEventListener('online', goOnline);
+      window.removeEventListener('offline', goOffline);
+    };
+  }, []);
+
+  const handleInstall = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const result = await installPrompt.userChoice;
+    if (result.outcome === 'accepted') {
+      setShowInstallBanner(false);
+      setInstallPrompt(null);
+    }
+  };
 
   const lottery = LOTTERIES[activeLottery];
   const distribution = distributions[activeLottery];
@@ -481,6 +517,46 @@ export default function PlanoAlfabetoApp() {
       background: "#FAFAF8",
     }}>
       <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,700;9..144,800&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+
+      {/* Offline Banner */}
+      {!isOnline && (
+        <div style={{
+          background: "#E53E3E", color: "#fff", padding: "8px 16px",
+          textAlign: "center", fontSize: 13, fontWeight: 600,
+        }}>
+          📡 Sem conexão — modo offline. Gerar jogos funciona, mas resultados não.
+        </div>
+      )}
+
+      {/* Install PWA Banner */}
+      {showInstallBanner && (
+        <div style={{
+          background: "linear-gradient(135deg, #1E7A34, #7B2D8E)",
+          color: "#fff", padding: "12px 16px",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          gap: 12, flexWrap: "wrap",
+        }}>
+          <span style={{ fontSize: 13, fontWeight: 500 }}>
+            📲 Instale o app no seu celular para usar offline!
+          </span>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={handleInstall} style={{
+              padding: "6px 16px", borderRadius: 8, border: "2px solid #fff",
+              background: "#fff", color: "#7B2D8E", fontWeight: 700,
+              fontSize: 13, cursor: "pointer",
+            }}>
+              Instalar
+            </button>
+            <button onClick={() => setShowInstallBanner(false)} style={{
+              padding: "6px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.4)",
+              background: "transparent", color: "#fff", fontWeight: 600,
+              fontSize: 13, cursor: "pointer",
+            }}>
+              Agora não
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div style={{
@@ -869,7 +945,9 @@ export default function PlanoAlfabetoApp() {
         textAlign: "center", padding: "20px 16px 30px", color: "#bbb", fontSize: 11,
         fontFamily: "'JetBrains Mono', monospace",
       }}>
-        Plano Alfabeto · Ferramenta de organização · Não garante premiação
+        Plano Alfabeto v2.0 · PWA · Funciona offline
+        <br />
+        Ferramenta de organização · Não garante premiação
         <br />
         Jogue com responsabilidade 🍀
       </div>

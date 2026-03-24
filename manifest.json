@@ -1,0 +1,47 @@
+{
+  "name": "Plano Alfabeto - Gerador de Jogos de Loteria",
+  "short_name": "Plano Alfabeto",
+  "description": "Gerador de jogos de loteria usando o método Plano Alfabeto para Lotofácil, Quina e Mega-Sena",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAFAF8",
+  "theme_color": "#7B2D8E",
+  "orientation": "portrait-primary",
+  "categories": ["utilities", "entertainment"],
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Lotofácil",
+      "short_name": "Lotofácil",
+      "url": "/?loteria=lotofacil",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Mega-Sena",
+      "short_name": "Mega-Sena",
+      "url": "/?loteria=megasena",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Quina",
+      "short_name": "Quina",
+      "url": "/?loteria=quina",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

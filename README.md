@@ -1,8 +1,8 @@
-# 🍀 Plano Alfabeto - Gerador de Jogos de Loteria
+# 🍀 Plano Alfabeto - Gerador de Jogos de Loteria (PWA)
 
-Gerador de jogos de loteria usando o método **Plano Alfabeto** — uma estratégia de organização que distribui números em grupos identificados por letras para criar jogos mais equilibrados.
+App progressivo (PWA) para gerar jogos de loteria usando o método **Plano Alfabeto** — funciona offline e pode ser instalado no celular.
 
-## Loterias Suportadas
+## Loterias
 
 - **Lotofácil** — 15 números de 25 (5 grupos)
 - **Quina** — 5 números de 80 (8 grupos)
@@ -10,21 +10,21 @@ Gerador de jogos de loteria usando o método **Plano Alfabeto** — uma estraté
 
 ## Funcionalidades
 
-- ⚡ **Gerador Automático** — Configure a distribuição por grupo e gere múltiplos jogos
-- ✏️ **Montagem Manual** — Escolha seus números com análise em tempo real
-- 📊 **Resultados** — Consulte último resultado da Caixa com análise por grupo
+- ⚡ Gerador Automático com distribuição por grupo
+- ✏️ Montagem Manual com análise em tempo real
+- 📊 Consulta de resultados da Caixa
+- 📲 Instalável como app (PWA)
+- 📡 Funciona offline (gerar jogos)
 
-## Como Rodar Localmente
+## Rodar localmente
 
 ```bash
 npm install
 npm run dev
 ```
 
-## Deploy no Railway
+## Deploy
 
-O projeto está configurado para deploy automático via GitHub no Railway.
+Railway com build automático via GitHub.
 
-## Aviso
-
-⚠️ Esta é uma ferramenta de **organização de jogos**, não um sistema que garante premiação. Jogue com responsabilidade.
+⚠️ Ferramenta de organização. Não garante premiação.
