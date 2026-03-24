@@ -1460,6 +1460,26 @@ export default function PlanoAlfabetoApp() {
                     })()}
                   </div>
                 )}
+
+                {/* Botão Salvar Jogo Manual */}
+                {manualNumbers.length === lottery.pick && (
+                  <button
+                    onClick={() => {
+                      const concurso = prompt("Para qual concurso é esse jogo? (opcional)") || "";
+                      saveGames([manualNumbers], activeLottery, concurso);
+                      alert("Jogo salvo!");
+                    }}
+                    style={{
+                      width: "100%", marginTop: 14, padding: "12px 20px", borderRadius: 10,
+                      border: "none", background: lottery.color, color: "#fff",
+                      fontWeight: 700, fontSize: 14, cursor: "pointer",
+                      fontFamily: "'DM Sans', sans-serif",
+                      boxShadow: `0 4px 16px ${lottery.color}30`,
+                    }}
+                  >
+                    💾 Salvar este Jogo
+                  </button>
+                )}
               </div>
             )}
           </div>
