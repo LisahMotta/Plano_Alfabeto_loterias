@@ -954,7 +954,7 @@ export default function PlanoAlfabetoApp() {
     )
   );
   const [generatedGames, setGeneratedGames] = useState([]);
-  const [gameCount, setGameCount] = useState(100);
+  const [gameCount, setGameCount] = useState(1);
   const [manualNumbers, setManualNumbers] = useState([]);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [installPrompt, setInstallPrompt] = useState(null);
