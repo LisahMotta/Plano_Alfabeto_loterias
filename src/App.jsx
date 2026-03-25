@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
@@ -19,7 +19,54 @@ const sendNotification = (title, body, icon = "/icon-192.png") => {
   }
 };
 
-// Configuração de fechamento por loteria
+// Tabela de preços por modalidade (valores vigentes desde julho/2025)
+// Calculados pela fórmula: C(n,pick) × preço_base
+const PRICING = {
+  megasena: {
+    base: 6.00, min: 6, max: 20,
+    prices: { 6:6, 7:42, 8:168, 9:504, 10:1260, 11:2772, 12:5544, 13:10296, 14:18018, 15:30030, 16:48048, 17:74256, 18:111384, 19:162792, 20:232560 },
+  },
+  quina: {
+    base: 3.00, min: 5, max: 15,
+    prices: { 5:3, 6:18, 7:63, 8:168, 9:378, 10:756, 11:1386, 12:2376, 13:3861, 14:6006, 15:9009 },
+  },
+  lotofacil: {
+    base: 3.50, min: 15, max: 20,
+    prices: { 15:3.50, 16:56, 17:680, 18:6120, 19:43680, 20:262080 },
+  },
+  duplasena: {
+    base: 3.00, min: 6, max: 15,
+    prices: { 6:3, 7:21, 8:84, 9:252, 10:630, 11:1386, 12:2772, 13:5148, 14:9009, 15:15015 },
+  },
+  supersete: {
+    base: 3.00, min: 7, max: 21,
+    prices: { 7:3, 8:6, 9:12, 10:24, 11:48, 12:96, 13:192, 14:384, 15:1152, 16:2304, 17:4608, 18:9216, 19:27648, 20:55296, 21:110592 },
+  },
+  lotomania: {
+    base: 3.00, min: 50, max: 50,
+    prices: { 50:3 },
+    fixed: true,
+  },
+  timemania: {
+    base: 3.50, min: 10, max: 10,
+    prices: { 10:3.50 },
+    fixed: true,
+  },
+  diadesorte: {
+    base: 2.50, min: 7, max: 15,
+    prices: { 7:2.50, 8:20, 9:120, 10:600, 11:2640, 12:10560, 13:38760, 14:131670, 15:417780 },
+  },
+  maismilionaria: {
+    base: 6.00, min: 6, max: 12,
+    prices: { 6:6, 7:42, 8:168, 9:504, 10:1260, 11:2772, 12:5544 },
+    trevoPrices: { 2:1, 3:3, 4:6, 5:10, 6:15 },
+    trevoMultiplier: true,
+  },
+};
+
+const formatCurrency = (val) => {
+  return val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+};
 const CLOSING_CONFIG = {
   lotofacil: { guarantee: 11, label: "11 acertos", maxNums: 20, tip: "Escolha 16 a 20 dezenas" },
   megasena: { guarantee: 4, label: "Quadra", maxNums: 15, tip: "Escolha 8 a 12 dezenas" },
@@ -431,6 +478,87 @@ const analyzeGame = (game) => {
   }).length;
   return { even, odd, sum, primes };
 };
+
+function PricingPanel({ lotteryKey, color }) {
+  const [showPricing, setShowPricing] = useState(false);
+  const pricing = PRICING[lotteryKey];
+  if (!pricing) return null;
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <button
+        onClick={() => setShowPricing(!showPricing)}
+        style={{
+          width: "100%", padding: "10px 16px", borderRadius: 10,
+          border: `1.5px solid ${color}30`, background: `${color}06`,
+          color, fontWeight: 600, fontSize: 13, cursor: "pointer",
+          fontFamily: "'DM Sans', sans-serif",
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+        }}
+      >
+        <span>💲 Tabela de Preços — Aposta simples: {formatCurrency(pricing.base)}</span>
+        <span style={{ fontSize: 11 }}>{showPricing ? "▲ fechar" : "▼ ver tabela"}</span>
+      </button>
+      {showPricing && (
+        <div style={{
+          marginTop: 8, padding: 14, borderRadius: 10,
+          background: "#fff", border: `1px solid ${color}20`,
+          maxHeight: 300, overflowY: "auto",
+        }}>
+          {pricing.fixed ? (
+            <div style={{ fontSize: 13, color: "#666", textAlign: "center", padding: 10 }}>
+              Aposta única: <strong>{formatCurrency(pricing.base)}</strong> ({pricing.min} números)
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2px 0" }}>
+              <div style={{ padding: "6px 10px", background: color, color: "#fff", fontSize: 12, fontWeight: 700, borderRadius: "8px 0 0 0" }}>
+                Números
+              </div>
+              <div style={{ padding: "6px 10px", background: color, color: "#fff", fontSize: 12, fontWeight: 700, textAlign: "right", borderRadius: "0 8px 0 0" }}>
+                Valor
+              </div>
+              {Object.entries(pricing.prices).map(([nums, price], i) => (
+                <React.Fragment key={nums}>
+                  <div style={{
+                    padding: "7px 10px", fontSize: 13, fontWeight: 600,
+                    background: i % 2 === 0 ? "#FAFAFA" : "#fff",
+                    color: "#444", fontFamily: "'JetBrains Mono', monospace",
+                  }}>
+                    {nums} {parseInt(nums) === pricing.min ? "(simples)" : "números"}
+                  </div>
+                  <div style={{
+                    padding: "7px 10px", fontSize: 13, fontWeight: 700,
+                    background: i % 2 === 0 ? "#FAFAFA" : "#fff",
+                    color: price > 1000 ? "#E53E3E" : price > 100 ? "#D69E2E" : "#276749",
+                    textAlign: "right", fontFamily: "'JetBrains Mono', monospace",
+                  }}>
+                    {formatCurrency(price)}
+                  </div>
+                </React.Fragment>
+              ))}
+            </div>
+          )}
+          {pricing.trevoMultiplier && pricing.trevoPrices && (
+            <div style={{ marginTop: 10, padding: 10, borderRadius: 8, background: "#FFFAF0", border: "1px solid #FEEBC8" }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#B8860B", marginBottom: 6 }}>
+                Trevos (multiplicam o valor):
+              </div>
+              {Object.entries(pricing.trevoPrices).map(([t, mult]) => (
+                <div key={t} style={{ fontSize: 12, color: "#666", display: "flex", justifyContent: "space-between" }}>
+                  <span>{t} trevos</span>
+                  <span style={{ fontWeight: 600 }}>×{mult}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ fontSize: 10, color: "#aaa", marginTop: 8, textAlign: "center" }}>
+            Valores vigentes desde julho/2025 — Fonte: Caixa
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function NumberBall({ number, color, size = "md", highlight = false, ghost = false }) {
   const sizes = {
@@ -1081,6 +1209,9 @@ export default function PlanoAlfabetoApp() {
 
       {/* Content */}
       <div style={{ padding: 16 }}>
+        {/* Tabela de Preços */}
+        <PricingPanel lotteryKey={activeLottery} color={lottery.color} />
+
         {/* AUTO TAB */}
         {activeTab === "auto" && (
           <div>
