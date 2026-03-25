@@ -685,13 +685,12 @@ function GroupCard({ letter, numbers, count, onCountChange, color, maxCount }) {
   );
 }
 
-function GameCard({ game, index, color, lottery, onRemove }) {
+function GameCard({ game, index, color, lottery, onRemove, score, rank }) {
   // Handle 3 formats: array, { numbers, trevos }, { columns, isColumnBased }
   const isCol = game && game.isColumnBased;
   const numbers = isCol ? Object.values(game.columns).flat() : (Array.isArray(game) ? game : game.numbers);
   const trevos = (!isCol && !Array.isArray(game)) ? game.trevos : null;
   const analysis = analyzeGame(numbers);
-  const score = scoreGame(game);
   const groupKeys = Object.keys(lottery.groups);
 
   const groupDistText = isCol
@@ -726,11 +725,24 @@ function GameCard({ game, index, color, lottery, onRemove }) {
           ×
         </button>
       )}
-      <div style={{ fontSize: 11, color: "#999" }}>
-  Score: {score}
-</div>
-      <div style={{ fontSize: 11, fontWeight: 700, color, marginBottom: 10, fontFamily: "'JetBrains Mono', monospace" }}>
-        JOGO #{index + 1}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color, fontFamily: "'JetBrains Mono', monospace" }}>
+          {rank !== undefined ? (
+            <span>{rank <= 3 ? ["🥇","🥈","🥉"][rank - 1] : `#${rank}`} </span>
+          ) : null}
+          JOGO #{index + 1}
+        </div>
+        {score !== undefined && (
+          <div style={{
+            padding: "2px 8px", borderRadius: 8,
+            background: score >= 40 ? "#F0FFF4" : score >= 25 ? "#FFFFF0" : "#FFF5F5",
+            border: `1px solid ${score >= 40 ? "#C6F6D5" : score >= 25 ? "#FEEBC8" : "#FED7D7"}`,
+            fontSize: 10, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace",
+            color: score >= 40 ? "#276749" : score >= 25 ? "#975A16" : "#C53030",
+          }}>
+            Score: {score}
+          </div>
+        )}
       </div>
       {isCol ? (
         <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
@@ -960,6 +972,7 @@ export default function PlanoAlfabetoApp() {
   const [generatedGames, setGeneratedGames] = useState([]);
   const [gameCount, setGameCount] = useState(1);
   const [manualNumbers, setManualNumbers] = useState([]);
+  const [modoPro, setModoPro] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [installPrompt, setInstallPrompt] = useState(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
@@ -1054,40 +1067,79 @@ export default function PlanoAlfabetoApp() {
     }));
   }, [activeLottery, lottery]);
 
-const handleGenerate = useCallback(() => {
-  const TOTAL = 100;
-  const qtd = gameCount;
+  // Sistema de pontuação PRO
+  const scoreGame = useCallback((game) => {
+    const numbers = Array.isArray(game) ? game : (game.numbers || (game.isColumnBased ? Object.values(game.columns).flat() : []));
+    if (numbers.length === 0) return 0;
+    const analysis = analyzeGame(numbers);
+    let score = 0;
 
-  // 🔹 MODO SIMPLES
-  if (!modoPro) {
-    const jogos = [];
+    // Equilíbrio par/ímpar (ideal ~50/50)
+    const diff = Math.abs(analysis.even - analysis.odd);
+    score += (numbers.length - diff) * 3;
 
-    for (let i = 0; i < TOTAL; i++) {
-      jogos.push(generateGame(lottery, distribution));
+    // Soma ideal (varia por loteria, penaliza extremos)
+    const avgNum = (lottery.range[0] + lottery.range[1]) / 2;
+    const somaIdeal = avgNum * lottery.pick;
+    const somaDesvio = Math.abs(analysis.sum - somaIdeal) / somaIdeal;
+    score += Math.max(0, 20 - Math.round(somaDesvio * 40));
+
+    // Primos equilibrados (entre 20% e 40% do total)
+    const primoPct = analysis.primes / numbers.length;
+    if (primoPct >= 0.2 && primoPct <= 0.4) score += 8;
+    else if (primoPct >= 0.15 && primoPct <= 0.5) score += 4;
+
+    // Penalizar sequências longas (1,2,3,4...)
+    let maxSeq = 0, seq = 0;
+    for (let i = 1; i < numbers.length; i++) {
+      if (numbers[i] === numbers[i - 1] + 1) { seq++; maxSeq = Math.max(maxSeq, seq); }
+      else seq = 0;
     }
+    score -= maxSeq * 4;
 
-    const filtrados = jogos.slice(TOTAL - qtd);
-    setGeneratedGames(filtrados);
-    return;
-  }
+    // Bonus: boa distribuição por grupos
+    const groupKeys = Object.keys(lottery.groups);
+    const groupsUsed = groupKeys.filter((k) => numbers.some((n) => lottery.groups[k].includes(n))).length;
+    const coverage = groupsUsed / groupKeys.length;
+    score += Math.round(coverage * 15);
 
-  // 🔥 MODO PRO
-  const jogos = [];
+    // Penalizar jogos com muitos números da mesma dezena (ex: 21,22,23,24)
+    const dezenas = {};
+    numbers.forEach((n) => { const d = Math.floor(n / 10); dezenas[d] = (dezenas[d] || 0) + 1; });
+    const maxDezena = Math.max(...Object.values(dezenas));
+    if (maxDezena > Math.ceil(numbers.length / 3)) score -= (maxDezena - Math.ceil(numbers.length / 3)) * 3;
 
-  for (let i = 0; i < TOTAL; i++) {
-    const jogo = generateGame(lottery, distribution);
-    const score = scoreGame(jogo);
+    return Math.max(0, score);
+  }, [lottery]);
 
-    jogos.push({ jogo, score });
-  }
+  const handleGenerate = useCallback(() => {
+    if (modoPro) {
+      // MODO PRO: gera 100, pontua, entrega os melhores
+      const TOTAL = 100;
+      const allGames = [];
+      const seen = new Set();
 
-  jogos.sort((a, b) => b.score - a.score);
+      for (let i = 0; i < TOTAL; i++) {
+        const game = generateGame(lottery, distribution);
+        const key = JSON.stringify(game);
+        if (seen.has(key)) { i--; continue; } // evita duplicatas
+        seen.add(key);
+        const score = scoreGame(game);
+        allGames.push({ game, score });
+      }
 
-  const melhores = jogos.slice(0, qtd).map(j => j.jogo);
-
-  setGeneratedGames(melhores);
-
-}, [lottery, distribution, gameCount, modoPro]);
+      allGames.sort((a, b) => b.score - a.score);
+      const melhores = allGames.slice(0, gameCount).map((j) => j.game);
+      setGeneratedGames(melhores);
+    } else {
+      // MODO SIMPLES: gera exatamente a quantidade pedida
+      const games = [];
+      for (let i = 0; i < gameCount; i++) {
+        games.push(generateGame(lottery, distribution));
+      }
+      setGeneratedGames(games);
+    }
+  }, [lottery, distribution, gameCount, modoPro, scoreGame]);
 
   const handleRemoveGame = useCallback((index) => {
     setGeneratedGames((prev) => prev.filter((_, i) => i !== index));
@@ -1100,35 +1152,7 @@ const handleGenerate = useCallback(() => {
       return [...prev, num].sort((a, b) => a - b);
     });
   }, [lottery.pick]);
-const scoreGame = (game) => {
-  const numbers = Array.isArray(game) ? game : game.numbers;
-  const analysis = analyzeGame(numbers);
 
-  let score = 0;
-
-  // 🎯 equilíbrio par/ímpar (ideal próximo de 50/50)
-  const diff = Math.abs(analysis.even - analysis.odd);
-  score += (numbers.length - diff) * 2;
-
-  // 🎯 soma ideal (ajuste por loteria)
-  if (analysis.sum > 100 && analysis.sum < 250) {
-    score += 10;
-  }
-
-  // 🎯 evitar muitos primos (ou poucos)
-  if (analysis.primes >= 3 && analysis.primes <= 6) {
-    score += 5;
-  }
-
-  // 🎯 penalizar sequência (1,2,3…)
-  let sequencia = 0;
-  for (let i = 1; i < numbers.length; i++) {
-    if (numbers[i] === numbers[i - 1] + 1) sequencia++;
-  }
-  score -= sequencia * 2;
-
-  return score;
-};
   const manualAnalysis = useMemo(() => {
     if (manualNumbers.length === 0) return null;
     return analyzeGame(manualNumbers);
@@ -1329,41 +1353,28 @@ const scoreGame = (game) => {
                 {totalSelected > lottery.pick ? " Reduza alguns grupos." : " Adicione mais números."}
               </div>
             )}
-              const [modoPro, setModoPro] = useState(true);
-              <div style={{
-  marginBottom: 12,
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center"
-}}>
-  <span style={{
-    fontSize: 13,
-    fontWeight: 600,
-    color: "#666"
-  }}>
-    Modo de geração:
-  </span>
 
-  <button
-    onClick={() => setModoPro(!modoPro)}
-    style={{
-      padding: "6px 14px",
-      borderRadius: 20,
-      border: modoPro ? "2px solid gold" : "2px solid #ccc",
-      background: modoPro ? "linear-gradient(135deg, gold, orange)" : "#f5f5f5",
-      color: modoPro ? "#000" : "#666",
-      fontWeight: 700,
-      fontSize: 12,
-      cursor: "pointer"
-    }}
-  >
-    {modoPro ? "💎 PRO ATIVO" : "Modo Simples"}
-  </button>
-</div>
             {/* Generate controls */}
             <div style={{
-              display: "flex", gap: 12, alignItems: "center", marginBottom: 20, flexWrap: "wrap",
+              display: "flex", gap: 12, alignItems: "center", marginBottom: 12, flexWrap: "wrap",
             }}>
+              {/* Modo PRO toggle */}
+              <button
+                onClick={() => setModoPro(!modoPro)}
+                style={{
+                  padding: "8px 16px", borderRadius: 10,
+                  border: modoPro ? "2px solid #D4540F" : "2px solid #ddd",
+                  background: modoPro ? "linear-gradient(135deg, #D4540F, #B8860B)" : "#f5f5f5",
+                  color: modoPro ? "#fff" : "#888",
+                  fontWeight: 700, fontSize: 13, cursor: "pointer",
+                  fontFamily: "'DM Sans', sans-serif",
+                  boxShadow: modoPro ? "0 2px 12px #D4540F30" : "none",
+                  transition: "all 0.3s",
+                }}
+              >
+                {modoPro ? "💎 PRO" : "⚪ Simples"}
+              </button>
+
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <label style={{ fontSize: 14, fontWeight: 600, color: "#444" }}>Quantidade:</label>
                 <select
@@ -1380,18 +1391,6 @@ const scoreGame = (game) => {
                   ))}
                 </select>
               </div>
-              {modoPro && (
-  <div style={{
-    background: "gold",
-    padding: "4px 10px",
-    borderRadius: 8,
-    fontSize: 11,
-    fontWeight: 700,
-    marginBottom: 10
-  }}>
-    💎 Inteligência ativa — jogos otimizados
-  </div>
-)}
               <button
                 onClick={handleGenerate}
                 disabled={!isValid}
@@ -1399,17 +1398,17 @@ const scoreGame = (game) => {
                   padding: "12px 28px",
                   borderRadius: 12,
                   border: "none",
-                  background: isValid ? lottery.color : "#ccc",
+                  background: isValid ? (modoPro ? "linear-gradient(135deg, #D4540F, #B8860B)" : lottery.color) : "#ccc",
                   color: "#fff",
                   fontWeight: 700,
                   fontSize: 15,
                   cursor: isValid ? "pointer" : "not-allowed",
                   fontFamily: "'DM Sans', sans-serif",
-                  boxShadow: isValid ? `0 4px 16px ${lottery.color}30` : "none",
+                  boxShadow: isValid ? `0 4px 16px ${modoPro ? "#D4540F" : lottery.color}30` : "none",
                   transition: "all 0.2s",
                 }}
               >
-                🎲 Gerar Jogos
+                {modoPro ? "💎 Gerar Melhores" : "🎲 Gerar Jogos"}
               </button>
               {generatedGames.length > 0 && (
                 <button
@@ -1424,6 +1423,19 @@ const scoreGame = (game) => {
                 </button>
               )}
             </div>
+
+            {/* Modo PRO info */}
+            {modoPro && (
+              <div style={{
+                padding: 12, borderRadius: 10, marginBottom: 16,
+                background: "linear-gradient(135deg, #D4540F08, #B8860B08)",
+                border: "1px solid #D4540F20", fontSize: 12, color: "#666", lineHeight: 1.6,
+              }}>
+                💎 <strong style={{ color: "#D4540F" }}>Modo PRO ativo</strong> — Gera 100 jogos internamente,
+                analisa equilíbrio par/ímpar, soma, primos, distribuição e sequências,
+                depois entrega apenas os {gameCount} melhores.
+              </div>
+            )}
 
             {/* Fechamento Garantido - disponível por loteria */}
             {CLOSING_CONFIG[activeLottery] && (
@@ -1521,7 +1533,7 @@ const scoreGame = (game) => {
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
                   <h3 style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 700, color: "#222", margin: 0 }}>
-                    {lottery.icon} Jogos Gerados ({generatedGames.length})
+                    {modoPro ? `💎 Top ${generatedGames.length} Melhores Jogos` : `${lottery.icon} Jogos Gerados (${generatedGames.length})`}
                   </h3>
                   <button
                     onClick={() => {
@@ -1553,6 +1565,8 @@ const scoreGame = (game) => {
                       color={lottery.color}
                       lottery={lottery}
                       onRemove={handleRemoveGame}
+                      score={modoPro ? scoreGame(game) : undefined}
+                      rank={modoPro ? i + 1 : undefined}
                     />
                   ))}
                 </div>
