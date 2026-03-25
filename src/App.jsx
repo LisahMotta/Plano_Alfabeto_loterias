@@ -691,6 +691,7 @@ function GameCard({ game, index, color, lottery, onRemove }) {
   const numbers = isCol ? Object.values(game.columns).flat() : (Array.isArray(game) ? game : game.numbers);
   const trevos = (!isCol && !Array.isArray(game)) ? game.trevos : null;
   const analysis = analyzeGame(numbers);
+  const score = scoreGame(game);
   const groupKeys = Object.keys(lottery.groups);
 
   const groupDistText = isCol
@@ -725,6 +726,9 @@ function GameCard({ game, index, color, lottery, onRemove }) {
           ×
         </button>
       )}
+      <div style={{ fontSize: 11, color: "#999" }}>
+  Score: {score}
+</div>
       <div style={{ fontSize: 11, fontWeight: 700, color, marginBottom: 10, fontFamily: "'JetBrains Mono', monospace" }}>
         JOGO #{index + 1}
       </div>
@@ -1050,13 +1054,40 @@ export default function PlanoAlfabetoApp() {
     }));
   }, [activeLottery, lottery]);
 
-  const handleGenerate = useCallback(() => {
-    const games = [];
-    for (let i = 0; i < gameCount; i++) {
-      games.push(generateGame(lottery, distribution));
+const handleGenerate = useCallback(() => {
+  const TOTAL = 100;
+  const qtd = gameCount;
+
+  // 🔹 MODO SIMPLES
+  if (!modoPro) {
+    const jogos = [];
+
+    for (let i = 0; i < TOTAL; i++) {
+      jogos.push(generateGame(lottery, distribution));
     }
-    setGeneratedGames(games);
-  }, [lottery, distribution, gameCount]);
+
+    const filtrados = jogos.slice(TOTAL - qtd);
+    setGeneratedGames(filtrados);
+    return;
+  }
+
+  // 🔥 MODO PRO
+  const jogos = [];
+
+  for (let i = 0; i < TOTAL; i++) {
+    const jogo = generateGame(lottery, distribution);
+    const score = scoreGame(jogo);
+
+    jogos.push({ jogo, score });
+  }
+
+  jogos.sort((a, b) => b.score - a.score);
+
+  const melhores = jogos.slice(0, qtd).map(j => j.jogo);
+
+  setGeneratedGames(melhores);
+
+}, [lottery, distribution, gameCount, modoPro]);
 
   const handleRemoveGame = useCallback((index) => {
     setGeneratedGames((prev) => prev.filter((_, i) => i !== index));
@@ -1069,7 +1100,35 @@ export default function PlanoAlfabetoApp() {
       return [...prev, num].sort((a, b) => a - b);
     });
   }, [lottery.pick]);
+const scoreGame = (game) => {
+  const numbers = Array.isArray(game) ? game : game.numbers;
+  const analysis = analyzeGame(numbers);
 
+  let score = 0;
+
+  // 🎯 equilíbrio par/ímpar (ideal próximo de 50/50)
+  const diff = Math.abs(analysis.even - analysis.odd);
+  score += (numbers.length - diff) * 2;
+
+  // 🎯 soma ideal (ajuste por loteria)
+  if (analysis.sum > 100 && analysis.sum < 250) {
+    score += 10;
+  }
+
+  // 🎯 evitar muitos primos (ou poucos)
+  if (analysis.primes >= 3 && analysis.primes <= 6) {
+    score += 5;
+  }
+
+  // 🎯 penalizar sequência (1,2,3…)
+  let sequencia = 0;
+  for (let i = 1; i < numbers.length; i++) {
+    if (numbers[i] === numbers[i - 1] + 1) sequencia++;
+  }
+  score -= sequencia * 2;
+
+  return score;
+};
   const manualAnalysis = useMemo(() => {
     if (manualNumbers.length === 0) return null;
     return analyzeGame(manualNumbers);
@@ -1270,7 +1329,37 @@ export default function PlanoAlfabetoApp() {
                 {totalSelected > lottery.pick ? " Reduza alguns grupos." : " Adicione mais números."}
               </div>
             )}
+              const [modoPro, setModoPro] = useState(true);
+              <div style={{
+  marginBottom: 12,
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center"
+}}>
+  <span style={{
+    fontSize: 13,
+    fontWeight: 600,
+    color: "#666"
+  }}>
+    Modo de geração:
+  </span>
 
+  <button
+    onClick={() => setModoPro(!modoPro)}
+    style={{
+      padding: "6px 14px",
+      borderRadius: 20,
+      border: modoPro ? "2px solid gold" : "2px solid #ccc",
+      background: modoPro ? "linear-gradient(135deg, gold, orange)" : "#f5f5f5",
+      color: modoPro ? "#000" : "#666",
+      fontWeight: 700,
+      fontSize: 12,
+      cursor: "pointer"
+    }}
+  >
+    {modoPro ? "💎 PRO ATIVO" : "Modo Simples"}
+  </button>
+</div>
             {/* Generate controls */}
             <div style={{
               display: "flex", gap: 12, alignItems: "center", marginBottom: 20, flexWrap: "wrap",
@@ -1291,6 +1380,18 @@ export default function PlanoAlfabetoApp() {
                   ))}
                 </select>
               </div>
+              {modoPro && (
+  <div style={{
+    background: "gold",
+    padding: "4px 10px",
+    borderRadius: 8,
+    fontSize: 11,
+    fontWeight: 700,
+    marginBottom: 10
+  }}>
+    💎 Inteligência ativa — jogos otimizados
+  </div>
+)}
               <button
                 onClick={handleGenerate}
                 disabled={!isValid}
