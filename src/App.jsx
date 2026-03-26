@@ -812,6 +812,11 @@ function ResultsPanel({ color }) {
         concurso: data.concurso || data.numero,
         data: data.data || data.dataApuracao,
         dezenas: data.dezenas || data.listaDezenas || data.resultado,
+        acumulou: data.acumulou ?? data.acumulado ?? null,
+        valorAcumulado: data.valorAcumuladoProximoConcurso || data.acumuladaProxConcurso || data.valorAcumulado || null,
+        valorEstimado: data.valorEstimadoProximoConcurso || data.estimativaPremio || null,
+        dataProximo: data.dataProximoConcurso || null,
+        premiacoes: data.premiacoes || data.listaRateioPremio || [],
       }),
     },
     {
@@ -826,6 +831,11 @@ function ResultsPanel({ color }) {
         concurso: data.concurso,
         data: data.data,
         dezenas: data.dezenas,
+        acumulou: data.acumulou ?? null,
+        valorAcumulado: data.acumuladaProxConcurso || data.valorAcumuladoProximoConcurso || null,
+        valorEstimado: data.valorEstimadoProximoConcurso || null,
+        dataProximo: data.dataProximoConcurso || null,
+        premiacoes: data.premiacoes || [],
       }),
     },
   ];
@@ -918,6 +928,7 @@ function ResultsPanel({ color }) {
           border: `1px solid ${LOTTERIES[searchLottery].color}25`,
           boxShadow: `0 4px 20px ${LOTTERIES[searchLottery].color}10`,
         }}>
+          {/* Header: concurso + data */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <div>
               <div style={{ fontSize: 12, fontWeight: 600, color: "#999", fontFamily: "'JetBrains Mono', monospace" }}>
@@ -932,11 +943,95 @@ function ResultsPanel({ color }) {
               <div style={{ fontSize: 16, fontWeight: 600, color: "#444" }}>{results.data}</div>
             </div>
           </div>
+
+          {/* Acumulou badge */}
+          {results.acumulou !== null && (
+            <div style={{
+              padding: "8px 14px", borderRadius: 10, marginBottom: 14, textAlign: "center",
+              background: results.acumulou ? "linear-gradient(135deg, #E53E3E, #C53030)" : "linear-gradient(135deg, #38A169, #276749)",
+              color: "#fff", fontWeight: 700, fontSize: 14,
+            }}>
+              {results.acumulou ? "🔴 ACUMULOU!" : "🟢 TEVE GANHADOR!"}
+            </div>
+          )}
+
+          {/* Dezenas sorteadas */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
             {(results.dezenas || []).map((d, i) => (
               <NumberBall key={i} number={parseInt(d)} color={LOTTERIES[searchLottery].color} size="lg" highlight />
             ))}
           </div>
+
+          {/* Próximo concurso e estimativa */}
+          {(results.valorEstimado || results.valorAcumulado) && (
+            <div style={{
+              padding: 14, borderRadius: 12, marginBottom: 14,
+              background: "linear-gradient(135deg, #FFFFF0, #FFF8E8)",
+              border: "1px solid #FEEBC8",
+            }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#975A16", marginBottom: 6 }}>
+                💰 PRÓXIMO CONCURSO {results.dataProximo ? `(${results.dataProximo})` : ""}
+              </div>
+              {results.valorEstimado && (
+                <div style={{ fontSize: 20, fontWeight: 800, color: "#B8860B", fontFamily: "'Fraunces', serif" }}>
+                  {typeof results.valorEstimado === "number"
+                    ? formatCurrency(results.valorEstimado)
+                    : results.valorEstimado}
+                </div>
+              )}
+              {results.acumulou && results.valorAcumulado && (
+                <div style={{ fontSize: 13, color: "#975A16", marginTop: 4 }}>
+                  Acumulado: {typeof results.valorAcumulado === "number"
+                    ? formatCurrency(results.valorAcumulado)
+                    : results.valorAcumulado}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Premiações por faixa */}
+          {results.premiacoes && results.premiacoes.length > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#444", marginBottom: 8 }}>
+                🏆 Premiação por Faixa:
+              </div>
+              <div style={{ borderRadius: 10, overflow: "hidden", border: "1px solid #eee" }}>
+                {results.premiacoes.map((p, i) => {
+                  const faixa = p.descricaoFaixa || p.descricao || p.acertos || `Faixa ${i + 1}`;
+                  const ganhadores = p.numeroDeGanhadores ?? p.ganhadores ?? p.numeroGanhadores ?? 0;
+                  const premio = p.valorPremio ?? p.premio ?? p.valor ?? 0;
+                  const temGanhador = parseInt(ganhadores) > 0;
+
+                  return (
+                    <div key={i} style={{
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                      padding: "8px 12px", background: i % 2 === 0 ? "#FAFAFA" : "#fff",
+                      borderBottom: i < results.premiacoes.length - 1 ? "1px solid #f0f0f0" : "none",
+                    }}>
+                      <div>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: "#444" }}>{faixa}</span>
+                        <span style={{
+                          marginLeft: 8, fontSize: 11,
+                          color: temGanhador ? "#276749" : "#999",
+                          fontWeight: 600,
+                        }}>
+                          {temGanhador ? `${ganhadores} ganhador${parseInt(ganhadores) > 1 ? "es" : ""}` : "Não houve"}
+                        </span>
+                      </div>
+                      <div style={{
+                        fontSize: 13, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace",
+                        color: temGanhador ? "#276749" : "#999",
+                      }}>
+                        {typeof premio === "number"
+                          ? formatCurrency(premio)
+                          : (typeof premio === "string" && premio.includes("R$") ? premio : `R$ ${premio}`)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Group analysis of result */}
           <div style={{ fontSize: 13, color: "#666", fontFamily: "'DM Sans', sans-serif", lineHeight: 1.8 }}>
